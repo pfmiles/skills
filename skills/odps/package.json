@@ -1,0 +1,11 @@
+{
+  "name": "odps",
+  "version": "0.2.0",
+  "description": "MaxCompute (ODPS) data query skill. Includes an automated SQL agent for complex analysis. Supports SQL execution with automatic result downloading via Tunnel.",
+  "publishConfig": {
+    "registry": "https://contextlab.alibaba-inc.com/skill"
+  },
+  "aoneKit": {
+    "generated": true
+  }
+}
