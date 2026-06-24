@@ -1,6 +1,6 @@
 # Claude API — C#
 
-> **Note:** The C# SDK is the official Anthropic SDK for C#. Tool use is supported via the Messages API. A class-annotation-based tool runner is not available; use raw tool definitions with JSON schema. The SDK also supports Microsoft.Extensions.AI IChatClient integration with function invocation.
+> **Note:** The C# SDK is the official Anthropic SDK for C#. Tool use is supported via the Messages API with a beta `BetaToolRunner` for automatic tool execution loops. The SDK also supports Microsoft.Extensions.AI IChatClient integration with function invocation and Managed Agents (beta).
 
 ## Installation
 
@@ -215,7 +215,7 @@ List<MessageParam> followUpMessages =
 
 ## Context Editing / Compaction (Beta)
 
-**Beta-namespace prefix is inconsistent** (source-verified against `src/Anthropic/Models/Beta/Messages/*.cs` @ 12.8.0). No prefix: `MessageCreateParams`, `MessageCountTokensParams`, `Role`. **Everything else has the `Beta` prefix**: `BetaMessageParam`, `BetaMessage`, `BetaContentBlock`, `BetaToolUseBlock`, all block param types. The unprefixed `Role` WILL collide with `Anthropic.Models.Messages.Role` if you import both namespaces (CS0104). Safest: import only Beta; if mixing, alias the beta `Role`:
+**Beta-namespace prefix is inconsistent** (source-verified against `src/Anthropic/Models/Beta/Messages/*.cs` @ 12.9.0). No prefix: `MessageCreateParams`, `MessageCountTokensParams`, `Role`. **Everything else has the `Beta` prefix**: `BetaMessageParam`, `BetaMessage`, `BetaContentBlock`, `BetaToolUseBlock`, all block param types. The unprefixed `Role` WILL collide with `Anthropic.Models.Messages.Role` if you import both namespaces (CS0104). Safest: import only Beta; if mixing, alias the beta `Role`:
 
 ```csharp
 using Anthropic.Models.Beta.Messages;
@@ -299,7 +299,7 @@ Values: `Effort.Low`, `Effort.Medium`, `Effort.High`, `Effort.Max`. Combine with
 
 ## Prompt Caching
 
-`System` takes `MessageCreateParamsSystem?` — a union of `string` or `List<TextBlockParam>`. There is no `SystemTextBlockParam`; use plain `TextBlockParam`. The implicit conversion needs the concrete `List<TextBlockParam>` type (array literals won't convert).
+`System` takes `MessageCreateParamsSystem?` — a union of `string` or `List<TextBlockParam>`. There is no `SystemTextBlockParam`; use plain `TextBlockParam`. The implicit conversion needs the concrete `List<TextBlockParam>` type (array literals won't convert). For placement patterns and the silent-invalidator audit checklist, see `shared/prompt-caching.md`.
 
 ```csharp
 System = new List<TextBlockParam> {
@@ -311,6 +311,8 @@ System = new List<TextBlockParam> {
 ```
 
 Optional `Ttl` on `CacheControlEphemeral`: `new() { Ttl = Ttl.Ttl1h }` or `Ttl.Ttl5m`. `CacheControl` also exists on `Tool.CacheControl` and top-level `MessageCreateParams.CacheControl`.
+
+Verify hits via `response.Usage.CacheCreationInputTokens` / `response.Usage.CacheReadInputTokens`.
 
 ---
 
@@ -398,3 +400,48 @@ new BetaRequestDocumentBlock {
 ```
 
 The non-beta `DocumentBlockParamSource` union has no file-ID variant — file references need `client.Beta.Messages.Create()`.
+
+---
+
+## Tool Runner (Beta)
+
+The C# SDK provides a `BetaToolRunner` for automatic tool execution loops. Define tools with raw JSON schemas, and the runner handles the API call → tool execution → result feedback loop.
+
+```csharp
+using Anthropic.Models.Beta.Messages;
+
+// Define tools and create params as shown in the Tool Use section above,
+// but using the beta namespace types (BetaToolUnion, etc.)
+var runner = client.Beta.Messages.ToolRunner(betaParams);
+
+await foreach (BetaMessage message in runner)
+{
+    foreach (var block in message.Content)
+    {
+        if (block.TryPickText(out var text))
+        {
+            Console.WriteLine(text.Text);
+        }
+    }
+}
+```
+
+---
+
+## Stop Details
+
+When `StopReason` is `"refusal"`, the response includes structured `StopDetails`:
+
+```csharp
+if (response.StopReason == "refusal" && response.StopDetails is { } details)
+{
+    Console.WriteLine($"Category: {details.Category}");
+    Console.WriteLine($"Explanation: {details.Explanation}");
+}
+```
+
+---
+
+## Managed Agents (Beta)
+
+The C# SDK supports Managed Agents via `client.Beta.Agents`, `client.Beta.Sessions`, `client.Beta.Environments`, and related namespaces. See `shared/managed-agents-overview.md` for the architecture and `curl/managed-agents.md` for the wire-level reference.
